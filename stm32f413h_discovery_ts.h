@@ -30,11 +30,10 @@
 #include "stm32f413h_discovery_lcd.h"
 
 /* Include TouchScreen component driver */
-#if defined (USE_STM32F413H_DISCOVERY_REVE)
+
 #include "../Components/ft3x67/ft3x67.h"
-#else /* USE_STM32F413H_DISCOVERY */
 #include "../Components/ft6x06/ft6x06.h"
-#endif /* USE_STM32F413H_DISCOVERY_REVE */
+
 /** @addtogroup BSP
   * @{
   */
@@ -52,12 +51,11 @@
   */
 /** @brief With FT6206 and FT3X67 : maximum 2 touches detected simultaneously
   */
-#if defined (USE_STM32F413H_DISCOVERY_REVE)
-#define TS_MAX_NB_TOUCH                 ((uint32_t) FT3X67_MAX_DETECTABLE_TOUCH)
+
+
 #define TS_MAX_WIDTH_HEIGHT             ((uint16_t)240)
-#else /* USE_STM32F413H_DISCOVERY */
-#define TS_MAX_NB_TOUCH                 ((uint32_t) FT6206_MAX_DETECTABLE_TOUCH)
-#endif /* USE_STM32F413H_DISCOVERY_REVE */
+#define TS_MAX_NB_TOUCH                 ((uint32_t) FT6206_MAX_DETECTABLE_TOUCH) /* Same Value defined for FT6206_MAX_DETECTABLE_TOUCH */
+
 
 #define TS_NO_IRQ_PENDING               ((uint8_t) 0)
 #define TS_IRQ_PENDING                  ((uint8_t) 1)

@@ -65,6 +65,7 @@
 static TS_DrvTypeDef *tsDriver;
 static uint8_t  I2C_Address = 0;
 static uint8_t  tsOrientation = TS_SWAP_NONE;
+static uint32_t  id_value = 0;
 
 /* Table for touchscreen event information display on LCD : table indexed on enum @ref TS_TouchEventTypeDef information */
 char * ts_event_string_tab[TOUCH_EVENT_NB_MAX] = { "None",
@@ -119,14 +120,17 @@ uint8_t BSP_TS_InitEx(uint16_t ts_SizeX, uint16_t ts_SizeY, uint8_t  orientation
 
   /* Initialize the communication channel to sensor (I2C) if necessary */
   /* that is initialization is done only once after a power up         */
-#if defined (USE_STM32F413H_DISCOVERY_REVE)
+  /* Scan TouchScreen IC controllers ID register by I2C Read               */
+  /* Verify this is a FT6x36 or FT3x67, otherwise this is an error case   */
   ft3x67_ts_drv.Init(I2C_Address);
-
-  if(ft3x67_ts_drv.ReadID(TS_I2C_ADDRESS) == FT3X67_ID_VALUE)
+  id_value = ft3x67_ts_drv.ReadID(TS_I2C_ADDRESS);
+  if(id_value == FT3X67_ID_VALUE)
   {
     /* Found FT3x67 : Initialize the TS driver structure */
     tsDriver = &ft3x67_ts_drv;
 
+    id_value = FT3X67_ID_VALUE;
+
     I2C_Address    = TS_I2C_ADDRESS;
 
     /* Get LCD chosen orientation */
@@ -153,46 +157,50 @@ uint8_t BSP_TS_InitEx(uint16_t ts_SizeX, uint16_t ts_SizeY, uint8_t  orientation
 
     } /* of if(ts_status == TS_OK) */
   }
-#else /* USE_STM32413H_DISCOVERY */
-  ft6x06_ts_drv.Init(I2C_Address);
 
-  /* Scan TouchScreen IC controller ID register by I2C Read */
   /* Verify this is a FT6x36 or FT3x67, otherwise this is an error case      */
-  if(ft6x06_ts_drv.ReadID(TS_I2C_ADDRESS) == FT6x36_ID_VALUE)
-  {
-    /* Found FT6x36 : Initialize the TS driver structure */
-    tsDriver = &ft6x06_ts_drv;
-
-    I2C_Address    = TS_I2C_ADDRESS;
-
-    /* Get LCD chosen orientation */
-    if(orientation == TS_ORIENTATION_PORTRAIT)
-    {
-      tsOrientation = TS_SWAP_Y;
-    }
-    else if(orientation == TS_ORIENTATION_LANDSCAPE_ROT180)
-    {
-      tsOrientation = TS_SWAP_XY;
-    }
-    else
-    {
-      tsOrientation = TS_SWAP_XY | TS_SWAP_Y;
-    }
-
-    if(ts_status == TS_OK)
-    {
-      /* Software reset the TouchScreen */
-      tsDriver->Reset(I2C_Address);
-
-      /* Calibrate, Configure and Start the TouchScreen driver */
-      tsDriver->Start(I2C_Address);
-
-    } /* of if(ts_status == TS_OK) */
-  }
-#endif /* USE_STM32F413H_DISCOVERY_REVE */
   else
   {
-    ts_status = TS_DEVICE_NOT_FOUND;
+    ft6x06_ts_drv.Init(I2C_Address);
+    id_value = ft6x06_ts_drv.ReadID(TS_I2C_ADDRESS);
+
+    if(id_value == FT6x36_ID_VALUE)
+    {
+      /* Found FT6x36 : Initialize the TS driver structure */
+      tsDriver = &ft6x06_ts_drv;
+
+      id_value = FT6x36_ID_VALUE;
+
+      I2C_Address    = TS_I2C_ADDRESS;
+
+      /* Get LCD chosen orientation */
+      if(orientation == TS_ORIENTATION_PORTRAIT)
+      {
+        tsOrientation = TS_SWAP_Y;
+      }
+      else if(orientation == TS_ORIENTATION_LANDSCAPE_ROT180)
+      {
+        tsOrientation = TS_SWAP_XY;
+      }
+      else
+      {
+        tsOrientation = TS_SWAP_XY | TS_SWAP_Y;
+      }
+
+      if(ts_status == TS_OK)
+      {
+        /* Software reset the TouchScreen */
+        tsDriver->Reset(I2C_Address);
+
+        /* Calibrate, Configure and Start the TouchScreen driver */
+        tsDriver->Start(I2C_Address);
+
+      } /* of if(ts_status == TS_OK) */
+    }
+    else
+    {
+      ts_status = TS_DEVICE_NOT_FOUND;
+    }
   }
 
   return (ts_status);
@@ -256,30 +264,34 @@ uint8_t BSP_TS_GetState(TS_StateTypeDef *TS_State)
       if(tsOrientation & TS_SWAP_XY)
       {
         tmp = Raw_x[index];
-        Raw_x[index] = Raw_y[index]; 
+        Raw_x[index] = Raw_y[index];
         Raw_y[index] = tmp;
       }
-#if defined (USE_STM32F413H_DISCOVERY_REVE)
-      if(tsOrientation & TS_SWAP_X)
+      if(id_value == FT3X67_ID_VALUE)
       {
-        Raw_x[index] = TS_MAX_WIDTH_HEIGHT - 1 - Raw_x[index];
+        if(tsOrientation & TS_SWAP_X)
+        {
+          Raw_x[index] = TS_MAX_WIDTH_HEIGHT - 1 - Raw_x[index];
+        }
+
+        if(tsOrientation & TS_SWAP_Y)
+        {
+          Raw_y[index] = TS_MAX_WIDTH_HEIGHT - 1 - Raw_y[index];
+        }
+      }
+      else
+      {
+        if(tsOrientation & TS_SWAP_X)
+        {
+          Raw_x[index] = FT_6206_MAX_WIDTH_HEIGHT - 1 - Raw_x[index];
+        }
+
+        if(tsOrientation & TS_SWAP_Y)
+        {
+          Raw_y[index] = FT_6206_MAX_WIDTH_HEIGHT - 1 - Raw_y[index];
+        }
       }
 
-      if(tsOrientation & TS_SWAP_Y)
-      {
-        Raw_y[index] = TS_MAX_WIDTH_HEIGHT - 1 - Raw_y[index];
-      }
-#else /* USE_STM32413H_DISCOVERY */
-      if(tsOrientation & TS_SWAP_X)
-      {
-        Raw_x[index] = FT_6206_MAX_WIDTH_HEIGHT - 1 - Raw_x[index];
-      }
-
-      if(tsOrientation & TS_SWAP_Y)
-      {
-        Raw_y[index] = FT_6206_MAX_WIDTH_HEIGHT - 1 - Raw_y[index];
-      }
-#endif /* USE_STM32F413H_DISCOVERY_REVE */
       xDiff = Raw_x[index] > _x[index]? (Raw_x[index] - _x[index]): (_x[index] - Raw_x[index]);
       yDiff = Raw_y[index] > _y[index]? (Raw_y[index] - _y[index]): (_y[index] - Raw_y[index]);
 
@@ -296,18 +308,23 @@ uint8_t BSP_TS_GetState(TS_StateTypeDef *TS_State)
 #if (TS_MULTI_TOUCH_SUPPORTED == 1)
 
       /* Get touch info related to the current touch */
-#if defined (USE_STM32F413H_DISCOVERY_REVE)
-      ft3x67_TS_GetTouchInfo(I2C_Address, index, &weight, &area, &event);
-#else /* USE_STM32413H_DISCOVERY */
-      ft6x06_TS_GetTouchInfo(I2C_Address, index, &weight, &area, &event);
-#endif /* USE_STM32F413H_DISCOVERY_REVE */
+      if(id_value == FT3X67_ID_VALUE)
+      {
+        ft3x67_TS_GetTouchInfo(I2C_Address, index, &weight, &area, &event);
+      }
+      else
+      {
+        ft6x06_TS_GetTouchInfo(I2C_Address, index, &weight, &area, &event);
+      }
       /* Update TS_State structure */
       TS_State->touchWeight[index] = weight;
       TS_State->touchArea[index]   = area;
-#if defined (USE_STM32F413H_DISCOVERY_REVE)
-      /* Remap touch event */
-      switch(event)
+
+      if(id_value == FT3X67_ID_VALUE)
       {
+        /* Remap touch event */
+        switch(event)
+        {
 
         case FT3X67_TOUCH_EVT_FLAG_PRESS_DOWN  :
           TS_State->touchEventId[index] = TOUCH_EVENT_PRESS_DOWN;
@@ -325,7 +342,9 @@ uint8_t BSP_TS_GetState(TS_StateTypeDef *TS_State)
           ts_status = TS_ERROR;
           break;
       } /* of switch(event) */
-#else /* USE_STM32413H_DISCOVERY */
+   }
+   else
+   {
       /* Remap touch event */
       switch(event)
       {
@@ -346,7 +365,7 @@ uint8_t BSP_TS_GetState(TS_StateTypeDef *TS_State)
           ts_status = TS_ERROR;
           break;
       } /* of switch(event) */
-#endif /* USE_STM32F413H_DISCOVERY_REVE */
+    }
 #endif /* TS_MULTI_TOUCH_SUPPORTED == 1 */
 
     } /* of for(index=0; index < TS_State->touchDetected; index++) */
@@ -372,13 +391,14 @@ uint8_t BSP_TS_Get_GestureId(TS_StateTypeDef *TS_State)
   uint32_t gestureId = 0;
   uint8_t  ts_status = TS_OK;
 
-#if defined (USE_STM32F413H_DISCOVERY_REVE)
-  /* Get gesture Id */
-  ft3x67_TS_GetGestureID(I2C_Address, &gestureId);
-
-  /* Remap gesture Id to a TS_GestureIdTypeDef value */
-  switch(gestureId)
+  if(id_value == FT3X67_ID_VALUE)
   {
+    /* Get gesture Id */
+    ft3x67_TS_GetGestureID(I2C_Address, &gestureId);
+
+    /* Remap gesture Id to a TS_GestureIdTypeDef value */
+    switch(gestureId)
+    {
     case FT3X67_GEST_ID_NO_GESTURE :
       TS_State->gestureId = GEST_ID_NO_GESTURE;
       break;
@@ -397,14 +417,16 @@ uint8_t BSP_TS_Get_GestureId(TS_StateTypeDef *TS_State)
     default :
       ts_status = TS_ERROR;
       break;
-  } /* of switch(gestureId) */
-#else /* USE_STM32413H_DISCOVERY */
-  /* Get gesture Id */
-  ft6x06_TS_GetGestureID(I2C_Address, &gestureId);
-
-  /* Remap gesture Id to a TS_GestureIdTypeDef value */
-  switch(gestureId)
+    } /* of switch(gestureId) */
+  }
+  else
   {
+    /* Get gesture Id */
+    ft6x06_TS_GetGestureID(I2C_Address, &gestureId);
+
+    /* Remap gesture Id to a TS_GestureIdTypeDef value */
+    switch(gestureId)
+    {
     case FT6206_GEST_ID_NO_GESTURE :
       TS_State->gestureId = GEST_ID_NO_GESTURE;
       break;
@@ -429,8 +451,8 @@ uint8_t BSP_TS_Get_GestureId(TS_StateTypeDef *TS_State)
     default :
       ts_status = TS_ERROR;
       break;
-  } /* of switch(gestureId) */
-#endif /* USE_STM32F413H_DISCOVERY_REVE */
+    } /* of switch(gestureId) */
+  }
   return(ts_status);
 }
 
